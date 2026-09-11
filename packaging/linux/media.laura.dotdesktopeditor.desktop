@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=DotDesktop Editor
+Comment=Edit .desktop application launcher entries
+Exec=dotdesktop-editor
+Icon=media.laura.dotdesktopeditor
+Categories=Utility;Settings;
+Terminal=false

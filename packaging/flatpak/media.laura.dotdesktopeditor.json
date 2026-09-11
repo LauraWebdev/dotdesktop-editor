@@ -1,0 +1,42 @@
+{
+  "app-id": "media.laura.dotdesktopeditor",
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "50",
+  "sdk": "org.gnome.Sdk",
+  "sdk-extensions": ["org.freedesktop.Sdk.Extension.node22"],
+  "command": "dotdesktop-editor",
+  "finish-args": [
+    "--socket=wayland",
+    "--socket=fallback-x11",
+    "--share=ipc",
+    "--device=dri",
+    "--filesystem=host",
+    "--filesystem=/var/lib/flatpak/exports/share:ro",
+    "--filesystem=/var/lib/snapd/desktop:ro",
+    "--talk-name=org.freedesktop.Flatpak"
+  ],
+  "build-options": {
+    "append-path": "/usr/lib/sdk/node22/bin",
+    "build-args": ["--share=network"]
+  },
+  "modules": [
+    {
+      "name": "dotdesktop-editor",
+      "buildsystem": "simple",
+      "build-commands": [
+        "npm ci",
+        "npm run build",
+        "mkdir -p /app/lib/dotdesktop-editor",
+        "cp -r dist node_modules package.json style.css icons /app/lib/dotdesktop-editor/",
+        "cp /usr/lib/sdk/node22/bin/node /app/lib/dotdesktop-editor/node",
+        "install -Dm755 packaging/flatpak/dotdesktop-editor.sh /app/bin/dotdesktop-editor",
+        "install -Dm644 packaging/linux/media.laura.dotdesktopeditor.desktop /app/share/applications/media.laura.dotdesktopeditor.desktop",
+        "install -Dm644 icons/media.laura.dotdesktopeditor.svg /app/share/icons/hicolor/scalable/apps/media.laura.dotdesktopeditor.svg",
+        "install -Dm644 packaging/flatpak/media.laura.dotdesktopeditor.metainfo.xml /app/share/metainfo/media.laura.dotdesktopeditor.metainfo.xml"
+      ],
+      "sources": [
+        { "type": "dir", "path": "../..", "skip": [".git", "node_modules", "dist"] }
+      ]
+    }
+  ]
+}

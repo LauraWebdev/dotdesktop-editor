@@ -1,0 +1,148 @@
+name: Dev release
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch: {}
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  prepare:
+    name: Build id
+    runs-on: ubuntu-latest
+    outputs:
+      build_id: ${{ steps.id.outputs.build_id }}
+      date: ${{ steps.id.outputs.date }}
+      sha7: ${{ steps.id.outputs.sha7 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: id
+        run: |
+          sha7="${GITHUB_SHA::7}"
+          {
+            echo "sha7=$sha7"
+            echo "build_id=dev-$(date -u +%Y%m%d)-$sha7"
+            echo "date=$(date -u +%Y-%m-%d)"
+          } >> "$GITHUB_OUTPUT"
+
+  linux-appimage:
+    name: Linux (AppImage)
+    runs-on: ubuntu-24.04
+    needs: prepare
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GTK4/libadwaita + build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-4-dev libadwaita-1-dev gobject-introspection libgirepository1.0-dev \
+            pkg-config build-essential librsvg2-common
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Build AppImage
+        run: |
+          chmod +x packaging/linux/build-appimage.sh
+          ./packaging/linux/build-appimage.sh "$PWD" \
+            "$PWD/DotDesktopEditor-${{ needs.prepare.outputs.build_id }}-x86_64.AppImage"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: DotDesktopEditor-*.AppImage
+          if-no-files-found: error
+
+  linux-flatpak:
+    name: Linux (Flatpak)
+    runs-on: ubuntu-24.04
+    needs: prepare
+    continue-on-error: true
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure flathub remote
+        run: |
+          flatpak remote-add --if-not-exists --system flathub https://flathub.org/repo/flathub.flatpakrepo
+
+      - name: Build .flatpak bundle
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: DotDesktopEditor-${{ needs.prepare.outputs.build_id }}-x86_64.flatpak
+          manifest-path: packaging/flatpak/media.laura.dotdesktopeditor.json
+          cache: true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-flatpak
+          path: DotDesktopEditor-*.flatpak
+          if-no-files-found: error
+
+  publish:
+    name: Publish prerelease
+    needs: [prepare, linux-appimage, linux-flatpak]
+    if: |
+      always() &&
+      (needs.linux-appimage.result == 'success' ||
+       needs.linux-flatpak.result == 'success')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Compose release notes
+        env:
+          APPIMAGE: ${{ needs.linux-appimage.result }}
+          FLATPAK: ${{ needs.linux-flatpak.result }}
+        run: |
+          mark() { [ "$1" = success ] && echo "built" || echo "**not built** ($1)"; }
+          {
+            echo "Automated prerelease from \`dev\` @ ${{ github.sha }}."
+            echo
+            echo "| target | status |"
+            echo "| --- | --- |"
+            echo "| Linux (AppImage) | $(mark "$APPIMAGE") |"
+            echo "| Linux (Flatpak) | $(mark "$FLATPAK") |"
+          } > notes.md
+
+      - name: Publish prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.build_id }}
+          name: "Dev build ${{ needs.prepare.outputs.date }} (${{ needs.prepare.outputs.sha7 }})"
+          prerelease: true
+          target_commitish: ${{ github.sha }}
+          body_path: notes.md
+          files: |
+            artifacts/*.AppImage
+            artifacts/*.flatpak
+
+      - name: Prune all but the newest 10 dev prereleases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 200 \
+            --json tagName,isPrerelease,createdAt \
+            --jq '[.[] | select(.isPrerelease and (.tagName | startswith("dev-")))]
+                  | sort_by(.createdAt) | reverse | .[10:] | .[].tagName' \
+          | while read -r tag; do
+              [ -n "$tag" ] || continue
+              echo "Deleting $tag"
+              gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+            done

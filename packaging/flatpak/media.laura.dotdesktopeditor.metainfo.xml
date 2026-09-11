@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>media.laura.dotdesktopeditor</id>
+  <name>DotDesktop Editor</name>
+  <summary>Edit .desktop application launcher entries</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>An application for browsing, creating and editing .desktop
+    application launcher entries across your local, system, Flatpak and Snap
+    directories.</p>
+  </description>
+  <launchable type="desktop-id">media.laura.dotdesktopeditor.desktop</launchable>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="1.0.0" date="2026-09-11"/>
+  </releases>
+</component>
