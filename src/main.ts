@@ -1,5 +1,8 @@
+import { fileURLToPath } from 'node:url'
+
 import GLib from 'gi:GLib-2.0'
 import Gio from 'gi:Gio-2.0'
+import Gdk from 'gi:Gdk-4.0'
 import Gtk from 'gi:Gtk-4.0'
 import Adw from 'gi:Adw-1'
 
@@ -19,6 +22,12 @@ const app = new Adw.Application({ applicationId: APP_ID, flags: Gio.ApplicationF
 
 app.on('activate', () => {
   styles.addFile(new URL('../style.css', import.meta.url))
+
+  const display = Gdk.Display.getDefault()
+  if (display) {
+    const iconsDir = fileURLToPath(new URL('../icons', import.meta.url))
+    Gtk.IconTheme.getForDisplay(display).addSearchPath(iconsDir)
+  }
 
   const window = new Adw.ApplicationWindow({ application: app })
   window.setTitle(APP_NAME)

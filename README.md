@@ -15,7 +15,6 @@ npm run dev        # run with live CSS reload
 ## Donations
 If you would like to support my open source projects, feel free to [drop me a coffee (or rather, an energy drink)](https://ko-fi.com/laurasofiaheimann).
 
-
 ## License
 This project is licensed under the [MIT License](LICENSE).
 
