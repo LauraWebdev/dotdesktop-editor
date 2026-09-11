@@ -22,12 +22,28 @@ cp -r "$REPO_ROOT/dist" "$REPO_ROOT/node_modules" "$REPO_ROOT/package.json" \
 
 cp "$(command -v node)" "$APPDIR/usr/bin/node"
 
-echo "## Resolving shared-library closure"
+TYPELIB_SRC="$(pkg-config --variable=typelibdir gobject-introspection-1.0)"
+cp "$TYPELIB_SRC"/*.typelib "$APPDIR/usr/lib/girepository-1.0/"
+
+mapfile -t TYPELIB_LIBNAMES < <(
+  strings "$APPDIR/usr/lib/girepository-1.0"/*.typelib \
+    | grep -oE '[A-Za-z0-9_.+-]+\.so(\.[0-9]+)*' \
+    | tr ',' '\n' \
+    | sort -u
+)
+
+mapfile -t TYPELIB_LIBPATHS < <(
+  for name in "${TYPELIB_LIBNAMES[@]}"; do
+    ldconfig -p | awk -v n="$name" '$1 == n {print $NF; exit}'
+  done | sort -u
+)
+
 mapfile -t SEED_LIBS < <(
   {
     echo "$APPDIR/usr/bin/node"
     find "$APPDIR/usr/lib/dotdesktop-editor/node_modules" -name '*.node'
     ldconfig -p | grep -E 'libgtk-4\.so|libadwaita-1\.so' | awk '{print $NF}'
+    printf '%s\n' "${TYPELIB_LIBPATHS[@]}"
   } | sort -u
 )
 
@@ -36,6 +52,7 @@ EXCLUDE_RE='^lib(c|m|dl|pthread|rt|resolv|util|nsl|gcc_s)\.so|^ld-linux|^libGL\.
 : > /tmp/so-closure.txt
 for lib in "${SEED_LIBS[@]}"; do
   [ -f "$lib" ] || continue
+  echo "$lib" >> /tmp/so-closure.txt
   ldd "$lib" 2>/dev/null | sed -n 's/.*=> \(\/[^ ]*\) (0x.*/\1/p' >> /tmp/so-closure.txt || true
 done
 sort -u -o /tmp/so-closure.txt /tmp/so-closure.txt
@@ -47,10 +64,6 @@ while IFS= read -r so; do
   cp -n "$so" "$APPDIR/usr/lib/" 2>/dev/null || true
 done < /tmp/so-closure.txt
 echo "## Bundled $(find "$APPDIR/usr/lib" -maxdepth 1 -name '*.so*' | wc -l) shared libraries"
-
-TYPELIB_SRC="$(pkg-config --variable=typelibdir gobject-introspection-1.0)"
-cp "$TYPELIB_SRC"/*.typelib "$APPDIR/usr/lib/girepository-1.0/"
-echo "## Bundled typelibs from $TYPELIB_SRC"
 
 PIXBUF_MODULEDIR="$(pkg-config --variable=gdk_pixbuf_moduledir gdk-pixbuf-2.0 2>/dev/null || true)"
 if [ -n "$PIXBUF_MODULEDIR" ] && [ -d "$PIXBUF_MODULEDIR" ]; then
