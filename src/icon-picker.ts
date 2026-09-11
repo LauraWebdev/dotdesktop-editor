@@ -42,7 +42,7 @@ export function createIconPicker(
         return
       }
 
-      const path = file.getPath()
+      const path = file?.getPath()
       if (!path) return
 
       image.setFromFile(path)
